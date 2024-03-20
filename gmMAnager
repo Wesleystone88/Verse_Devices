@@ -1,0 +1,79 @@
+
+using { /Fortnite.com/Devices }
+using { /Fortnite.com/Characters }
+using { /Verse.org/Simulation }
+using { /Verse.org/Simulation/Tags }
+using { /Verse.org/Random }
+using { /UnrealEngine.com/Temporary/SpatialMath }
+using { /Fortnite.com/Game }
+
+# See https://dev.epicgames.com/documentation/en-us/uefn/create-your-own-device-in-verse for how to create a verse device.
+
+# A Verse-authored creative device that can be placed in a level
+spawner := class(tag){}
+ 
+Gm_manger := class(creative_device):
+  
+    @editable PetAssets:[] creative_prop_asset = array{} 
+    var CustomPlayers : [player]custom_player = map{}
+   
+    # Runs when the device is started in a running game
+    OnBegin<override>()<suspends>:void=
+        Print("Game Manager OnBegin called.")
+       GetPlayspace().PlayerRemovedEvent().Subscribe(OnPlayerLeftServer)
+       Print("Game Manager playspace subcribe remove event .")
+       InitSpawners()
+       Print("Game Manager initspawners2.")
+
+    InitSpawners():void=
+        Print("Game Manager 1.")
+        Spawners := GetCreativeObjectsWithTag(spawner{})
+        Print("Game Manager 1.5.")
+        for (Obj : Spawners):
+            Print("Game Manager 2.")
+            if (Spawner := player_spawner_device[Obj]):
+                Print("Game Manager 3.")
+                Spawner.SpawnedEvent.Subscribe(OnPlayerSpawned)
+                Print("Game Manager 4.")
+    OnPlayerSpawned(Agent : agent):void=
+        Print("Game Manager 5.")
+        if (Player := player[Agent]):
+            Initplayer(Player)        
+            Print("Game Manager player spawned.")
+    Initplayer(Player : player):void=   
+        Print("Game Manager 6.")
+        Rand := GetRandomInt(0, PetAssets.Length - 1)
+        if:
+            PetAsset := PetAssets[Rand]
+            Agent := agent[Player]
+            fort := Agent.GetFortCharacter[]
+        then:
+            if (existing :=CustomPlayers[Player]){}
+            else:
+                fort.EliminatedEvent().Subscribe(OnPlayerEliminated)
+                Print("Game Manager 7.")
+                Customplayer := custom_player{Player := Player, PetAsset := PetAsset}
+                Customplayer.Init()
+                if(set CustomPlayers [Player] = Customplayer) {}
+                Print("Game Manager custom map .")
+
+    OnPlayerEliminated(Result : elimination_result):void=
+        if:
+            killer := Result.EliminatingCharacter?
+            Agent := killer.GetAgent[]
+            Player := player[Agent]
+            Customplayer := CustomPlayers [Player]
+        then:
+            if (not(Result.EliminatedCharacter = Result.EliminatingCharacter?)):
+                Customplayer.AwardElimination()
+    OnPlayerLeftServer(PlayerLeaving : player):void=
+        if(customplayer := CustomPlayers[PlayerLeaving]):
+            # clean up assets   / data leaving
+            customplayer.Dispose()
+            Print("Game Manager dispose.")
+            #remove the player from map
+            var newCustomPlayerMap:[player]custom_player = map{}
+
+            for (Key -> Value : CustomPlayers, Key <> PlayerLeaving):
+                set newCustomPlayerMap = ConcatenateMaps(newCustomPlayerMap, map{Key => Value})
+                Print("Game Manager newmap.")
