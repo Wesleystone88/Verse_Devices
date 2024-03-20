@@ -1,0 +1,45 @@
+using { /Fortnite.com/Devices }
+using { /Fortnite.com/Characters }
+using { /Verse.org/Simulation }
+using { /UnrealEngine.com/Temporary/Diagnostics }
+using { /UnrealEngine.com/Temporary/SpatialMath }
+
+spawn_pet_device := class(creative_device):
+    var Players : []player = array{}
+    
+    @editable
+    SpawnEgg : signal_remote_manager_device = signal_remote_manager_device{}
+
+    @editable
+    wispAsset : creative_prop_asset = DefaultCreativePropAsset
+    
+    Spawnwisp(Agent: agent): void =
+        if (FortCharacter := Agent.GetFortCharacter[]):
+            # Calculate spawn position relative to player
+            PlayerPos := FortCharacter.GetTransform().Translation
+            PlayerForward := FortCharacter.GetViewRotation().GetLocalForward() * 300.0
+            PlayerUp := FortCharacter.GetViewRotation().GetLocalUp() * 250.0
+            wispSpawnPos := PlayerPos + PlayerForward + PlayerUp
+
+            # Spawn the wisp at calculated position
+            Result := SpawnProp(wispAsset, wispSpawnPos, rotation{})
+            if (SpawnedProp := Result(0)?):
+                spawn:
+                    wispfollow(FortCharacter, SpawnedProp)
+
+    wispfollow(FortniteCharacter : fort_character, CreativeProp : creative_prop)<suspends> : void =
+        loop:
+            Sleep(0.1)  # Slight delay to reduce server strain
+            PlayerPos := FortniteCharacter.GetTransform().Translation
+            PlayerForward := FortniteCharacter.GetViewRotation().GetLocalForward() * 300.0
+            PlayerUp := FortniteCharacter.GetViewRotation().GetLocalUp() * 250.0
+            TargetPos := PlayerPos + PlayerForward + PlayerUp
+
+            # Command the wisp to move to target position
+            CreativeProp.MoveTo(TargetPos, rotation{}, 0.8)
+             
+    OnBegin<override>()<suspends>:void=
+        set Players = GetPlayspace().GetPlayers()
+        # Subscribe to signal events for spawning the wisp
+        SpawnEgg.PrimarySignalEvent.Subscribe(Spawnwisp)
+        SpawnEgg.SecondarySignalEvent.Subscribe(Spawnwisp)
