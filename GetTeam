@@ -1,0 +1,133 @@
+using { /UnrealEngine.com/Temporary/Diagnostics }
+using { /Fortnite.com/Devices }
+using { /Verse.org/Simulation }
+using { /Fortnite.com/FortPlayerUtilities }
+
+# ABOUT THIS CODE
+# This is game mode that splits teams equally. Great for Red vs 
+# Blue, Hunters vs Runners, etc! Teams are set to split once the    
+# pregame timer runs out. Feel free to add to this code to complete 
+# your game.
+
+#DEVICES NEEDED FOR START UP 
+# Timer Device
+# Player Counter 
+# 2 Sets of Player Spawn Pads 
+#   1 set in Pregame Area- set to Pregame Only - Team Any
+#   1 set in each Game area for each team - set to GamePlay Only - Make sure to set the team index for each
+# 2 Teleporters - One for team 1 and One for team 2
+# 2 Team Inventory and Settings Devices 
+#   - 1 for Team 1 - (Name Your Team)
+#   - 1 for Team 2 - (Name Your Team)
+
+# Use Event Binding for these Devices 
+#  2 Hud Message Devices ( Pregame )
+#   - 1 to Show a message that states: Not enough Players to Start - when count fails
+#   - 1 to  Show a message that states : Game Starting - when count succeeds 
+
+
+# -IMPORTANT-
+# Island Settings 
+
+# Max Players : Any amount you want, as long as it is an even number
+# Team Index: 2
+# Team Size: Dynamic
+# Default Class Identifier: No Class
+# Join in Progress : Spawn
+# Spawn Location : Spawn Pads 
+# Post Game Spawn Location: island start
+# If you do not want players to see their teams when game starts, uncheck Display Scoreboard 
+# Display Scoreboard: unchecked
+
+
+Team_Setter_Device := class(creative_device):
+
+    @editable var PregameTimer : timer_device = timer_device{}
+    @editable var PregameCounter : player_counter_device = player_counter_device{}
+    @editable var HudPregame : hud_controller_device = hud_controller_device{}
+    @editable var HudGameStart : hud_controller_device = hud_controller_device{}
+    
+
+
+    #Create an array for Game Start Teleporters. Be sure to assign each based on the Team Index
+    @editable var Teleporters : [] teleporter_device = array{}
+
+    # Holds the teams found with GetTeams()
+    var Teams : []team = array{}
+
+    OnBegin<override>()<suspends> : void =
+        #Let's Compare Players to Target
+        PregameCounter.CompareToTarget()
+        #When a Count Succeeds Start the Pregame Timer 
+        PregameCounter.CountSucceedsEvent.Subscribe(StartPregameTimer)
+        Print("Found 1")
+
+    StartPregameTimer() : void=
+        PregameTimer.Start()
+        PregameTimer.SuccessEvent.Subscribe(SplitTeams)
+        Print("Found 2")
+
+    SplitTeams(Agent : ?agent) : void=
+            set Teams = Self.GetPlayspace().GetTeamCollection().GetTeams()
+            AllPlayers := GetPlayspace().GetPlayers()
+            #Subscribe to PlayerAddedEvent to allow team rebalancing when a new player joins the game
+            Self.GetPlayspace().PlayerAddedEvent().Subscribe(OnPlayerAdded)
+            BalanceTeams()
+            TeleportPlayersToStartLocations()
+            #Lets Disable The Player Counter Since Players will no longer be in the Pregame
+            PregameCounter.Disable()
+            Print("Found 3")
+
+    # --IMPORTANT--
+    # This is a neverending Hunters vs Runners Game. So lets keep players balanced even when the game is running.
+    # Be sure to insert Player Spawner Pads in the Hunter Section and Runner Section with the appropriate Team Indexes 
+    # Set these Spawn Pads to Enabled Phase: Gameplay Only
+
+    OnPlayerAdded(InPlayer : player) : void =
+        BalanceTeams()
+        TeleportPlayersToStartLocations()            
+        Print("Found 4")
+    <#
+    For each player, find the number of players of the team they're on. Iterate through the
+    list of teams and assign them to the team with the least amount of players, or their
+    starting team in case of ties.
+    #>
+
+    BalanceTeams() : void =
+        AllPlayers := GetPlayspace().GetPlayers()
+        for (TeamPlayer : AllPlayers, CurrentTeam := GetPlayspace().GetTeamCollection().GetTeam[TeamPlayer]):
+            # Assign Players to a new team if teams are unbalanced
+            var TeamSize:int = 0
+            Print("Found 5")
+            if(CurrentTeamSize := GetPlayspace().GetTeamCollection().GetAgents[CurrentTeam].Length):
+                set TeamSize = CurrentTeamSize
+
+            SmallestTeam : ?team = FindSmallestTeam(TeamSize)
+            if (TeamToAssign := SmallestTeam?, GetPlayspace().GetTeamCollection().AddToTeam[TeamPlayer, TeamToAssign]) {}
+            Print("Found 6")
+    FindSmallestTeam(CurrentTeamSize : int) : ?team =
+        var SmallestTeam : ?team = false
+        var TeamSize : int = CurrentTeamSize
+
+        <#
+        For each team Team, get the number of players on that team. If it has less players than SmallestTeam,
+        set SmallestTeam to Team and update TeamSize to the number of players on the new Team
+        #>
+
+        for(Team : Teams, CandidateTeamSize := GetPlayspace().GetTeamCollection().GetAgents[Team].Length, TeamSize > CandidateTeamSize):
+            set SmallestTeam = option{Team}
+            set TeamSize = CandidateTeamSize
+            Print("Found a team with less players: {CandidateTeamSize}")
+        return SmallestTeam 
+
+    TeleportPlayersToStartLocations():void=
+        for:
+            TeamIndex -> PlayerTeam:Teams 
+            TeamPlayers := GetPlayspace().GetTeamCollection().GetAgents[PlayerTeam]
+            TeamTeleporter := Teleporters[TeamIndex]
+            Transform := TeamTeleporter.GetTransform()
+           
+        do:
+            for(TeamPlayer:TeamPlayers):
+                TeamPlayer.Respawn(Transform.Translation, Transform.Rotation)
+                Print("Found 8")
